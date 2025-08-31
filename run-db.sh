@@ -2,6 +2,14 @@
 
 set -euo pipefail
 
+export PGHOST=${PGHOST:-localhost}
+export PGPORT=${PGPORT:-5432}
+export PGUSER=${PGUSER:-renderer}
+export PGPASSWORD=${PGPASSWORD:-renderer}
+export PGDATABASE=${PGDATABASE:-gis}
+export PGSSLMODE=${PGSSLMODE:-disable}
+export PGCONNECT_TIMEOUT=${PGCONNECT_TIMEOUT:-10}
+
 function createPostgresConfig() {
   cp /etc/postgresql/$PG_VERSION/main/postgresql.custom.conf.tmpl /etc/postgresql/$PG_VERSION/main/conf.d/postgresql.custom.conf
   sudo -u postgres echo "autovacuum = $AUTOVACUUM" >> /etc/postgresql/$PG_VERSION/main/conf.d/postgresql.custom.conf
@@ -16,14 +24,7 @@ if [ "$#" -ne 1 ]; then
     echo "usage: <import|run>"
     echo "commands:"
     echo "    import: Set up the database and import /data/region.osm.pbf"
-    echo "    run: Runs Apache and renderd to serve tiles at /tile/{z}/{x}/{y}.png"
-    echo "environment variables:"
-    echo "    THREADS: defines number of threads used for importing / tile rendering"
-    echo "    UPDATES: consecutive updates (enabled/disabled)"
-    echo "    NAME_LUA: name of .lua script to run as part of the style"
-    echo "    NAME_STYLE: name of the .style to use"
-    echo "    NAME_MML: name of the .mml file to render to mapnik.xml"
-    echo "    NAME_SQL: name of the .sql file to use"
+    echo "    run: Runs PostgreSQL and updates if enabled"
     exit 1
 fi
 
@@ -156,19 +157,10 @@ if [ "$1" == "run" ]; then
     # Fix postgres data privileges
     chown -R postgres: /var/lib/postgresql/ /data/database/postgres/
 
-    # Configure Apache CORS
-    if [ "${ALLOW_CORS:-}" == "enabled" ] || [ "${ALLOW_CORS:-}" == "1" ]; then
-        echo "export APACHE_ARGUMENTS='-D ALLOW_CORS'" >> /etc/apache2/envvars
-    fi
-
-    # Initialize PostgreSQL and Apache
+    # Initialize PostgreSQL
     createPostgresConfig
     service postgresql start
-    service apache2 restart
     setPostgresPassword
-
-    # Configure renderd threads
-    sed -i -E "s/num_threads=[0-9]+/num_threads=${THREADS:-4}/g" /etc/renderd.conf
 
     # start cron job to trigger consecutive updates
     if [ "${UPDATES:-}" == "enabled" ] || [ "${UPDATES:-}" == "1" ]; then
@@ -177,7 +169,6 @@ if [ "$1" == "run" ]; then
         sudo -u renderer touch /var/log/tiles/osmosis.log; tail -f /var/log/tiles/osmosis.log >> /proc/1/fd/1 &
         sudo -u renderer touch /var/log/tiles/expiry.log; tail -f /var/log/tiles/expiry.log >> /proc/1/fd/1 &
         sudo -u renderer touch /var/log/tiles/osm2pgsql.log; tail -f /var/log/tiles/osm2pgsql.log >> /proc/1/fd/1 &
-
     fi
 
     # Run while handling docker stop's SIGTERM
@@ -186,7 +177,7 @@ if [ "$1" == "run" ]; then
     }
     trap stop_handler SIGTERM
 
-    sudo -u renderer renderd -f -c /etc/renderd.conf &
+    tail -f /var/log/postgresql/postgresql-$PG_VERSION-main.log >> /proc/1/fd/1 &
     child=$!
     wait "$child"
 

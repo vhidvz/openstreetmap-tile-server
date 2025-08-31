@@ -1,9 +1,11 @@
 .PHONY: build push test
 
-DOCKER_IMAGE=overv/openstreetmap-tile-server
+DB_IMAGE=wenex/osm-db
+TILE_IMAGE=wenex/osm-tileserver
 
 build:
-	docker build -t ${DOCKER_IMAGE} .
+	docker build -t ${DB_IMAGE} -f Dockerfile.db .
+	docker build -t ${TILE_IMAGE} -f Dockerfile.tileserver .
 
 push: build
 	docker push ${DOCKER_IMAGE}:latest

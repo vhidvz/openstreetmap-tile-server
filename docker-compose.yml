@@ -1,14 +1,73 @@
-version: '3'
-
 services:
-  map:
-    image: overv/openstreetmap-tile-server
-    volumes:
-      - osm-data:/data/database/
+  tileserver1:
+    profiles: ["start"]
+    container_name: tileserver1
+    image: wenex/osm-tileserver:latest
     ports:
-      - "8080:80"
-    command: "run"
+      - 18010:80
+    environment:
+      - ALLOW_CORS=enabled
+      - PGHOST=tileserver-db
+    volumes:
+      - ./.data/osm-style:/data/style/
+      - ./.data/osm-tiles:/data/tiles/
+    depends_on:
+      - tileserver-db
+    networks:
+      - localnet
 
-volumes:
-  osm-data:
-    external: true
+  tileserver2:
+    profiles: ["start"]
+    container_name: tileserver2
+    image: wenex/osm-tileserver:latest
+    ports:
+      - 18011:80
+    environment:
+      - ALLOW_CORS=enabled
+      - PGHOST=tileserver-db
+    volumes:
+      - ./.data/osm-style:/data/style/
+      - ./.data/osm-tiles:/data/tiles/
+    depends_on:
+      - tileserver-db
+    networks:
+      - localnet
+
+  tileserver-import:
+    profiles: ["setup"]
+    image: wenex/osm-db:latest
+    command: import
+    environment:
+      - DOWNLOAD_POLY=http://download.geofabrik.de/asia/iran.poly
+      - DOWNLOAD_PBF=http://download.geofabrik.de/asia/iran-latest.osm.pbf
+    volumes:
+      - ./.data/osm-style:/data/style/
+      - ./.data/osm-tiles:/data/tiles/
+      - ./.data/osm-data:/data/database/
+    shm_size: 1gb
+    networks:
+      - localnet
+
+  tileserver-db:
+    profiles: ["start"]
+    hostname: tileserver-db
+    container_name: tileserver-db
+    image: wenex/osm-db:latest
+    command: run
+    environment:
+      - UPDATES=enabled
+      - MAX_INTERVAL_SECONDS=900
+      - REPLICATION_URL=http://download.geofabrik.de/asia/iran-updates/
+      - RENDERD_HOST=tileserver1 # Links to the tileserver service for expiry
+    volumes:
+      - ./.data/osm-style:/data/style/
+      - ./.data/osm-tiles:/data/tiles/
+      - ./.data/osm-data:/data/database/
+    shm_size: 1gb
+    networks:
+      - localnet
+
+networks:
+  localnet:
+    driver: bridge
+    name: wenex-network

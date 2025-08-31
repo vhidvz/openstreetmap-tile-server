@@ -2,6 +2,15 @@
 
 set -e
 
+# Add this to support TCP
+RENDERD_HOST="${RENDERD_HOST:-}"
+RENDERD_PORT="${RENDERD_PORT:-7653}"
+if [ -n "$RENDERD_HOST" ]; then
+    RENDERD_SOCKET="inet;$RENDERD_HOST:$RENDERD_PORT"
+else
+    RENDERD_SOCKET="/run/renderd/renderd.sock"
+fi
+
 #------------------------------------------------------------------------------
 # Change directory to mod_tile directory so that we can run replag
 # and other things directly from this script when run from cron.
@@ -191,7 +200,7 @@ m_ok "expiring tiles"
 # delete >= $EXPIRY_DELETEFROM and <= $EXPIRY_MAXZOOM.
 # The default path to renderd.sock is fixed.
 #------------------------------------------------------------------------------
-if ! render_expired --map=default --min-zoom=$EXPIRY_MINZOOM --touch-from=$EXPIRY_TOUCHFROM --delete-from=$EXPIRY_DELETEFROM --max-zoom=$EXPIRY_MAXZOOM -s /run/renderd/renderd.sock < "$EXPIRY_FILE.$$" 2>&1 | tail -8 >> "$EXPIRYLOG"; then
+if ! render_expired --map=default --min-zoom=$EXPIRY_MINZOOM --touch-from=$EXPIRY_TOUCHFROM --delete-from=$EXPIRY_DELETEFROM --max-zoom=$EXPIRY_MAXZOOM -s "${RENDERD_SOCKET:-/run/renderd/renderd.sock}" < "$EXPIRY_FILE.$$" 2>&1 | tail -8 >> "$EXPIRYLOG"; then
     m_info "Expiry failed"
 fi
 

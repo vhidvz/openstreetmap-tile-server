@@ -96,10 +96,7 @@ RUN wget https://github.com/googlefonts/noto-emoji/blob/9a5261d871451f9b5183c934
 RUN wget https://github.com/stamen/terrain-classic/blob/master/fonts/unifont-Medium.ttf?raw=true --content-disposition -P /usr/share/fonts/
 
 # Install python libraries
-RUN pip3 install \
-  requests \
-  osmium \
-  pyyaml
+RUN pip3 install --break-system-packages requests osmium pyyaml
 
 # Install carto for stylesheet
 RUN npm install -g carto@1.2.0
